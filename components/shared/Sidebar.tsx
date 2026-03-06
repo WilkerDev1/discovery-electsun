@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import {
     LayoutDashboard,
     FolderKanban,
-    FileTemplate,
+    FileText,
     Users,
     Newspaper,
     BookOpen,
@@ -42,7 +42,7 @@ const navItems = [
     {
         label: "Plantillas",
         href: "/admin/templates",
-        icon: FileTemplate,
+        icon: FileText,
     },
     {
         label: "Usuarios",
