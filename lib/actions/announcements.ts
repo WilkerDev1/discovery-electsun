@@ -19,10 +19,10 @@ export async function createAnnouncement(formData: FormData, authorId: string) {
     }
 
     try {
-        // Extract hashtags from the body
-        const hashtagRegex = /#[a-zA-Z0-9_]+/g;
-        const matchedTags = parsed.data.body.match(hashtagRegex) || [];
-        const tags = Array.from(new Set(matchedTags.map(tag => tag.slice(1)))); // Remove '#' and deduplicate
+        // Extract hashtags from the body safely
+        const hashtagRegex = /#(\w+)/g;
+        const matchedTags = [...parsed.data.body.matchAll(hashtagRegex)].map(m => m[1]);
+        const tags = Array.from(new Set(matchedTags)); // Deduplicate
 
         await prisma.announcement.create({
             data: {
@@ -37,7 +37,7 @@ export async function createAnnouncement(formData: FormData, authorId: string) {
         revalidatePath("/admin/feed");
         return { success: true };
     } catch (error) {
-        console.error("Error creating announcement:", error);
-        return { success: false, error: "Error interno del servidor" };
+        console.error("[ACTION ERROR - createAnnouncement]:", error);
+        return { success: false, error: error instanceof Error ? error.message : "Error interno del servidor" };
     }
 }

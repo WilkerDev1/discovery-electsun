@@ -40,7 +40,9 @@ export function NewAnnouncementDialog({ authorId }: { authorId: string }) {
             setOpen(false);
             form.reset();
         } else {
-            toast.error("Error al publicar", { description: "No se pudo crear el anuncio." });
+            console.error("Submission error:", result.error);
+            const errorMessage = typeof result.error === "string" ? result.error : "Verifica que todos los campos sean válidos.";
+            toast.error("Error al publicar", { description: errorMessage });
         }
     }
 
