@@ -19,12 +19,18 @@ export async function createAnnouncement(formData: FormData, authorId: string) {
     }
 
     try {
+        // Extract hashtags from the body
+        const hashtagRegex = /#[a-zA-Z0-9_]+/g;
+        const matchedTags = parsed.data.body.match(hashtagRegex) || [];
+        const tags = Array.from(new Set(matchedTags.map(tag => tag.slice(1)))); // Remove '#' and deduplicate
+
         await prisma.announcement.create({
             data: {
                 title: parsed.data.title,
                 body: parsed.data.body,
                 isPinned: parsed.data.isPinned === "on",
                 authorId: authorId,
+                tags: tags,
             }
         });
 

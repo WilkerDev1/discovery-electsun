@@ -144,6 +144,7 @@ model Project {
   clientAddress  String
   clientPhone    String?
   description    String?
+  coverUrl       String?
   status         ProjectStatus @default(PENDING)
   completionPct  Float         @default(0)
   templateId     String?
@@ -157,6 +158,7 @@ model Project {
   template     Template?           @relation(fields: [templateId], references: [id])
   assignments  ProjectAssignment[]
   requirements Requirement[]
+  comments     Comment[]
 
   @@map("projects")
 }
@@ -238,13 +240,15 @@ model EvidenceVersion {
 
 model Comment {
   id         String   @id @default(cuid())
-  evidenceId String
+  evidenceId String?
+  projectId  String?
   authorId   String
   body       String   @db.Text
   createdAt  DateTime @default(now())
 
-  evidence Evidence @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
-  author   User     @relation(fields: [authorId], references: [id])
+  evidence Evidence? @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+  project  Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author   User      @relation(fields: [authorId], references: [id])
 
   @@map("comments")
 }
@@ -255,6 +259,7 @@ model Announcement {
   body        String   @db.Text
   imageUrl    String?
   externalUrl String?
+  tags        String[]
   authorId    String
   isPinned    Boolean  @default(false)
   createdAt   DateTime @default(now())
