@@ -1,14 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search, Calendar, MoreVertical, GripVertical } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Search, Calendar, GripVertical, Trash2 } from "lucide-react";
 import { NewProjectDialog } from "./new-project-dialog";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
+import { updateProjectStatus, deleteProject } from "@/lib/actions/projects";
+import { toast } from "sonner";
 
 type ProjectStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "ARCHIVED";
 
@@ -19,8 +23,16 @@ const columns: { status: ProjectStatus; label: string; color: string }[] = [
     { status: "ARCHIVED", label: "Archivado", color: "bg-zinc-300" },
 ];
 
-export function KanbanBoard({ projects }: { projects: any[] }) {
+export function KanbanBoard({ projects: initialProjects }: { projects: any[] }) {
     const [searchQuery, setSearchQuery] = useState("");
+    const [projects, setProjects] = useState(initialProjects);
+
+    // Fix hydration mismatch between server and client for DnD
+    const [isMounted, setIsMounted] = useState(false);
+    useEffect(() => {
+        setIsMounted(true);
+        setProjects(initialProjects);
+    }, [initialProjects]);
 
     const filtered = projects.filter(p =>
         p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -28,9 +40,50 @@ export function KanbanBoard({ projects }: { projects: any[] }) {
     );
 
     const grouped = columns.reduce((acc, col) => {
-        acc[col.status] = filtered.filter(p => p.status === col.status);
+        acc[col.status] = filtered.filter(p => p.status === col.status).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         return acc;
     }, {} as Record<ProjectStatus, any[]>);
+
+    const handleDragEnd = async (result: DropResult) => {
+        const { source, destination, draggableId } = result;
+
+        if (!destination) return;
+        if (source.droppableId === destination.droppableId && source.index === destination.index) return;
+
+        const newStatus = destination.droppableId as ProjectStatus;
+
+        // Optimistic update
+        setProjects(prev => prev.map(p => p.id === draggableId ? { ...p, status: newStatus } : p));
+
+        const res = await updateProjectStatus(draggableId, newStatus);
+        if (!res.success) {
+            toast.error("Error", { description: "No se pudo actualizar el estado" });
+            // Revert changes on error by syncing with initialProjects
+            setProjects(initialProjects);
+        } else {
+            toast.success("Estado actualizado");
+        }
+    };
+
+    const handleDelete = async (e: React.MouseEvent, id: string) => {
+        e.preventDefault(); // Prevent navigating to project details
+        e.stopPropagation();
+
+        if (window.confirm("¿Seguro que deseas eliminar este proyecto completamente? Esta acción no se puede deshacer.")) {
+            // Optimistic deletion
+            setProjects(prev => prev.filter(p => p.id !== id));
+
+            const res = await deleteProject(id);
+            if (!res.success) {
+                toast.error("Error al eliminar", { description: res.error });
+                setProjects(initialProjects); // revert
+            } else {
+                toast.success("Proyecto eliminado", { description: "El proyecto ha sido borrado de la base de datos." });
+            }
+        }
+    };
+
+    if (!isMounted) return <div className="p-8 text-center text-zinc-500">Cargando tablero...</div>;
 
     return (
         <div className="space-y-6">
@@ -52,77 +105,117 @@ export function KanbanBoard({ projects }: { projects: any[] }) {
                 />
             </div>
 
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
-                {columns.map((column) => {
-                    const colProjects = grouped[column.status] ?? [];
-                    return (
-                        <div key={column.status} className="space-y-3">
-                            <div className="flex items-center gap-2 px-1">
-                                <div className={`h-2.5 w-2.5 rounded-full ${column.color}`} />
-                                <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{column.label}</h2>
-                                <Badge variant="secondary" className="ml-auto bg-zinc-100 text-zinc-500 text-xs dark:bg-zinc-800">{colProjects.length}</Badge>
-                            </div>
-                            <div className="space-y-3 rounded-xl bg-zinc-100/50 p-3 min-h-[200px] dark:bg-zinc-900/50">
-                                {colProjects.map((project) => (
-                                    <Link href={`/admin/projects/${project.id}`} key={project.id} className="block group">
-                                        <Card className="cursor-pointer border-zinc-200 bg-white transition-all hover:shadow-md hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700">
-                                            <CardContent className="p-4 space-y-3">
-                                                <div className="space-y-1">
-                                                    <div className="flex items-start justify-between gap-2">
-                                                        <h3 className="text-sm font-semibold text-zinc-900 leading-tight dark:text-white">{project.name}</h3>
-                                                        <MoreVertical className="h-4 w-4 text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                                    </div>
-                                                    <p className="text-xs text-zinc-500 line-clamp-2">{project.clientName} — {project.clientAddress}</p>
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <div className="flex justify-between text-[10px] text-zinc-400">
-                                                        <span>Progreso</span>
-                                                        <span className="font-medium">{Math.round(project.completionPct)}%</span>
-                                                    </div>
-                                                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-                                                        <div className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500 transition-all" style={{ width: `${project.completionPct}%` }} />
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center justify-between pt-1">
-                                                    <div className="flex items-center gap-1 text-[11px] text-zinc-400">
-                                                        <Calendar className="h-3 w-3" />
-                                                        {project.estimatedEnd ? format(new Date(project.estimatedEnd), "dd MMM yy", { locale: es }) : "Sin fecha"}
-                                                    </div>
-                                                    <div className="flex items-center gap-1">
-                                                        {project.assignments && project.assignments.length > 0 ? (
-                                                            <div className="flex -space-x-1.5">
-                                                                {project.assignments.map((assignment: any, i: number) => (
-                                                                    <div
-                                                                        key={i}
-                                                                        className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-gradient-to-br from-zinc-400 to-zinc-500 text-[9px] font-bold text-white dark:border-zinc-900"
-                                                                        title={assignment.user.name}
+            <DragDropContext onDragEnd={handleDragEnd}>
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4 items-start">
+                    {columns.map((column) => {
+                        const colProjects = grouped[column.status] ?? [];
+                        return (
+                            <div key={column.status} className="space-y-3 flex flex-col h-full min-w-0">
+                                <div className="flex items-center gap-2 px-1">
+                                    <div className={`h-2.5 w-2.5 rounded-full ${column.color}`} />
+                                    <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{column.label}</h2>
+                                    <Badge variant="secondary" className="ml-auto bg-zinc-100 text-zinc-500 text-xs dark:bg-zinc-800">{colProjects.length}</Badge>
+                                </div>
+
+                                <Droppable droppableId={column.status}>
+                                    {(provided, snapshot) => (
+                                        <div
+                                            {...provided.droppableProps}
+                                            ref={provided.innerRef}
+                                            className={`flex-1 space-y-3 rounded-xl p-3 min-h-[200px] transition-colors ${snapshot.isDraggingOver ? 'bg-zinc-200/50 dark:bg-zinc-800/80 ring-2 ring-indigo-500/20' : 'bg-zinc-100/50 dark:bg-zinc-900/50'}`}
+                                        >
+                                            {colProjects.map((project, index) => (
+                                                <Draggable key={project.id} draggableId={project.id} index={index}>
+                                                    {(provided, snapshot) => (
+                                                        <div
+                                                            ref={provided.innerRef}
+                                                            {...provided.draggableProps}
+                                                            {...provided.dragHandleProps}
+                                                            className={snapshot.isDragging ? 'opacity-80' : ''}
+                                                            style={provided.draggableProps.style}
+                                                        >
+                                                            <Link href={`/admin/projects/${project.id}`} className="block group">
+                                                                <Card className="relative overflow-hidden cursor-grab active:cursor-grabbing border-zinc-200 bg-white transition-all hover:shadow-md hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:border-zinc-700">
+
+                                                                    {/* Cover Image Placeholder or Real Image */}
+                                                                    {project.coverUrl ? (
+                                                                        <div className="h-24 w-full overflow-hidden bg-zinc-100 border-b border-zinc-100 dark:border-zinc-900">
+                                                                            <img src={project.coverUrl} alt="Cover" className="h-full w-full object-cover transition-transform group-hover:scale-105" />
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div className="h-2 bg-gradient-to-r from-zinc-200 to-zinc-100 dark:from-zinc-800 dark:to-zinc-900" />
+                                                                    )}
+
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="absolute top-2 right-2 h-7 w-7 bg-white/50 backdrop-blur-sm hover:bg-red-50 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all z-10"
+                                                                        onClick={(e) => handleDelete(e, project.id)}
                                                                     >
-                                                                        {assignment.user.name.split(" ").map((w: string) => w[0]).join("")}
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        ) : (
-                                                            <span className="text-[10px] text-zinc-300">Sin asignar</span>
-                                                        )}
+                                                                        <Trash2 className="h-4 w-4" />
+                                                                    </Button>
+
+                                                                    <CardContent className="p-4 space-y-3">
+                                                                        <div className="space-y-1 pr-6">
+                                                                            <h3 className="text-sm font-semibold text-zinc-900 leading-tight dark:text-white line-clamp-1">{project.name}</h3>
+                                                                            <p className="text-xs text-zinc-500 line-clamp-1">{project.clientName} — {project.clientAddress}</p>
+                                                                        </div>
+                                                                        <div className="space-y-1">
+                                                                            <div className="flex justify-between text-[10px] text-zinc-400">
+                                                                                <span>Progreso</span>
+                                                                                <span className="font-medium">{Math.round(project.completionPct)}%</span>
+                                                                            </div>
+                                                                            <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                                                                                <div className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500 transition-all" style={{ width: `${project.completionPct}%` }} />
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="flex items-center justify-between pt-1">
+                                                                            <div className="flex items-center gap-1 text-[11px] text-zinc-400">
+                                                                                <Calendar className="h-3 w-3" />
+                                                                                {project.estimatedEnd ? format(new Date(project.estimatedEnd), "dd MMM yy", { locale: es }) : "Sin fecha"}
+                                                                            </div>
+                                                                            <div className="flex items-center gap-1">
+                                                                                {project.assignments && project.assignments.length > 0 ? (
+                                                                                    <div className="flex -space-x-1.5">
+                                                                                        {project.assignments.map((assignment: any, i: number) => (
+                                                                                            <div
+                                                                                                key={i}
+                                                                                                className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-gradient-to-br from-zinc-400 to-zinc-500 text-[8px] font-bold text-white dark:border-zinc-900"
+                                                                                                title={assignment.user.name}
+                                                                                            >
+                                                                                                {assignment.user.name.split(" ").map((w: string) => w[0]).join("")}
+                                                                                            </div>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <span className="text-[10px] text-zinc-300">Asignar</span>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    </CardContent>
+                                                                </Card>
+                                                            </Link>
+                                                        </div>
+                                                    )}
+                                                </Draggable>
+                                            ))}
+                                            {provided.placeholder}
+                                            {colProjects.length === 0 && (
+                                                <div className="flex flex-col items-center justify-center py-8 text-center pointer-events-none">
+                                                    <div className="text-zinc-300 dark:text-zinc-700">
+                                                        <GripVertical className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                                                        <p className="text-xs">Soltar aquí</p>
                                                     </div>
                                                 </div>
-                                            </CardContent>
-                                        </Card>
-                                    </Link>
-                                ))}
-                                {colProjects.length === 0 && (
-                                    <div className="flex flex-col items-center justify-center py-12 text-center">
-                                        <div className="text-zinc-300 dark:text-zinc-700">
-                                            <GripVertical className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                                            <p className="text-xs">Sin proyectos</p>
+                                            )}
                                         </div>
-                                    </div>
-                                )}
+                                    )}
+                                </Droppable>
                             </div>
-                        </div>
-                    );
-                })}
-            </div>
+                        );
+                    })}
+                </div>
+            </DragDropContext>
         </div>
     );
 }

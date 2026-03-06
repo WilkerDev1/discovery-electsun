@@ -244,6 +244,8 @@ model Comment {
   projectId  String?
   authorId   String
   body       String   @db.Text
+  fileUrl    String?
+  fileType   String?
   createdAt  DateTime @default(now())
 
   evidence Evidence? @relation(fields: [evidenceId], references: [id], onDelete: Cascade)

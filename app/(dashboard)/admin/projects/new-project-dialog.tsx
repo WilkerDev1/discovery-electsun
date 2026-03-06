@@ -21,6 +21,8 @@ const formSchema = z.object({
 
 export function NewProjectDialog() {
     const [open, setOpen] = useState(false);
+    const [file, setFile] = useState<File | null>(null);
+
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: { name: "", clientName: "", clientAddress: "", estimatedEnd: "" },
@@ -31,6 +33,9 @@ export function NewProjectDialog() {
         Object.entries(values).forEach(([k, v]) => {
             formData.append(k, v || "");
         });
+        if (file) {
+            formData.append("coverFile", file);
+        }
 
         // Server Action
         const result = await createProject(formData);
@@ -39,6 +44,7 @@ export function NewProjectDialog() {
             toast.success("Proyecto creado", { description: "El proyecto ha sido creado exitosamente." });
             setOpen(false);
             form.reset();
+            setFile(null);
         } else {
             toast.error("Error al crear", { description: "No se pudo crear el proyecto." });
         }
@@ -70,6 +76,10 @@ export function NewProjectDialog() {
                         <FormField control={form.control} name="estimatedEnd" render={({ field }) => (
                             <FormItem><FormLabel>Fecha Límite (Opcional)</FormLabel><FormControl><Input type="date" {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
                         )} />
+                        <div className="space-y-2">
+                            <FormLabel className="text-sm font-medium">Foto de Portada (Opcional)</FormLabel>
+                            <Input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+                        </div>
                         <Button type="submit" className="w-full">Crear Proyecto</Button>
                     </form>
                 </Form>
