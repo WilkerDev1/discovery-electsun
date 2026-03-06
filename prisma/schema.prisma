@@ -1,0 +1,287 @@
+// prisma/schema.prisma
+// Discovery Platform — Electsun S.R.L.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── ENUMS ────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  TECHNICIAN
+}
+
+enum ProjectStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  ARCHIVED
+}
+
+enum EvidenceStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum RequirementType {
+  PHOTO
+  TEXT
+  NUMBER
+}
+
+enum ResourceCategory {
+  MANUAL
+  REGULATION
+  GUIDE
+  OTHER
+}
+
+// ─── MODELOS ──────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  role          Role      @default(TECHNICIAN)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  assignments   ProjectAssignment[]
+  evidences     Evidence[]
+  comments      Comment[]
+  announcements Announcement[]
+  resources     Resource[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model Template {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  requirements TemplateRequirement[]
+  projects     Project[]
+
+  @@map("templates")
+}
+
+model TemplateRequirement {
+  id          String          @id @default(cuid())
+  templateId  String
+  name        String
+  description String?
+  type        RequirementType @default(PHOTO)
+  isMandatory Boolean         @default(true)
+  order       Int             @default(0)
+  category    String?
+  createdAt   DateTime        @default(now())
+
+  template Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@map("template_requirements")
+}
+
+model Project {
+  id             String        @id @default(cuid())
+  name           String
+  clientName     String
+  clientAddress  String
+  clientPhone    String?
+  description    String?
+  status         ProjectStatus @default(PENDING)
+  completionPct  Float         @default(0)
+  templateId     String?
+  estimatedStart DateTime?
+  estimatedEnd   DateTime?
+  completedAt    DateTime?
+  reportUrl      String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  template     Template?           @relation(fields: [templateId], references: [id])
+  assignments  ProjectAssignment[]
+  requirements Requirement[]
+
+  @@map("projects")
+}
+
+model ProjectAssignment {
+  id         String   @id @default(cuid())
+  projectId  String
+  userId     String
+  assignedAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([userId])
+  @@map("project_assignments")
+}
+
+model Requirement {
+  id          String          @id @default(cuid())
+  projectId   String
+  name        String
+  description String?
+  type        RequirementType @default(PHOTO)
+  isMandatory Boolean         @default(true)
+  order       Int             @default(0)
+  category    String?
+  createdAt   DateTime        @default(now())
+
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  evidences Evidence[]
+
+  @@index([projectId, order])
+  @@map("requirements")
+}
+
+model Evidence {
+  id             String         @id @default(cuid())
+  requirementId  String
+  uploadedById   String
+  status         EvidenceStatus @default(PENDING)
+  fileUrl        String
+  fileKey        String
+  fileName       String
+  fileSizeBytes  Int
+  mimeType       String
+  latitude       Float?
+  longitude      Float?
+  capturedAt     DateTime       @default(now())
+  approvedAt     DateTime?
+  rejectedAt     DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  requirement Requirement       @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  uploadedBy  User              @relation(fields: [uploadedById], references: [id])
+  comments    Comment[]
+  versions    EvidenceVersion[]
+
+  @@index([status])
+  @@index([uploadedById])
+  @@index([requirementId, status])
+  @@map("evidences")
+}
+
+model EvidenceVersion {
+  id            String   @id @default(cuid())
+  evidenceId    String
+  versionNum    Int
+  fileUrl       String
+  fileKey       String
+  fileSizeBytes Int
+  createdAt     DateTime @default(now())
+
+  evidence Evidence @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+
+  @@map("evidence_versions")
+}
+
+model Comment {
+  id         String   @id @default(cuid())
+  evidenceId String
+  authorId   String
+  body       String   @db.Text
+  createdAt  DateTime @default(now())
+
+  evidence Evidence @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+  author   User     @relation(fields: [authorId], references: [id])
+
+  @@map("comments")
+}
+
+model Announcement {
+  id          String   @id @default(cuid())
+  title       String
+  body        String   @db.Text
+  imageUrl    String?
+  externalUrl String?
+  authorId    String
+  isPinned    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  author User @relation(fields: [authorId], references: [id])
+
+  @@index([createdAt(sort: Desc)])
+  @@map("announcements")
+}
+
+model Resource {
+  id            String           @id @default(cuid())
+  title         String
+  description   String?
+  category      ResourceCategory @default(OTHER)
+  fileUrl       String
+  fileKey       String
+  fileName      String
+  fileSizeBytes Int
+  uploadedById  String
+  downloadCount Int              @default(0)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  uploadedBy User @relation(fields: [uploadedById], references: [id])
+
+  @@index([category])
+  @@map("resources")
+}
