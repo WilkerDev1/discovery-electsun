@@ -1,54 +1,22 @@
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { formatDistanceToNow } from "date-fns";
+import { es } from "date-fns/locale";
 import {
     Card,
     CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
     Pin,
-    Plus,
-    MessageSquare,
-    ExternalLink,
     Megaphone,
     Zap,
     BookOpen,
 } from "lucide-react";
+import { NewAnnouncementDialog } from "./new-announcement-dialog";
 
-const announcements = [
-    {
-        id: "1",
-        title: "🎉 Bienvenidos a Discovery",
-        body: "La nueva plataforma de gestión de evidencias de Electsun ya está en marcha. Técnicos: documenten sus instalaciones desde la app. Administradores: auditen las evidencias en tiempo real.",
-        author: "Administrador Electsun",
-        date: "Hace 2 horas",
-        isPinned: true,
-        type: "announcement" as const,
-    },
-    {
-        id: "2",
-        title: "📋 Nuevo protocolo de fotografías",
-        body: "A partir de hoy, todas las instalaciones requieren una foto panorámica del techo ANTES de iniciar los trabajos. Esta evidencia es obligatoria para el reporte final del cliente.",
-        author: "Administrador Electsun",
-        date: "Hace 1 día",
-        isPinned: false,
-        type: "announcement" as const,
-    },
-    {
-        id: "3",
-        title: "⚡ Proyecto Hotel Caribeño completado",
-        body: "El equipo completó exitosamente la instalación de 25kW en el Resort Caribeño. Felicitaciones a todos los técnicos involucrados.",
-        author: "Administrador Electsun",
-        date: "Hace 3 días",
-        isPinned: false,
-        type: "system" as const,
-    },
-];
-
-const typeConfig = {
+const typeConfig: Record<string, { icon: any, color: string, bgColor: string }> = {
     announcement: {
         icon: Megaphone,
         color: "text-blue-600",
@@ -66,7 +34,26 @@ const typeConfig = {
     },
 };
 
-export default function FeedPage() {
+export default async function FeedPage() {
+    const session = await auth();
+    const authorId = session?.user?.id || "";
+
+    const dbAnnouncements = await prisma.announcement.findMany({
+        orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
+        include: { author: true }
+    });
+
+    // Map Prisma models to the format expected by the UI. All db rows map to 'announcement' type for now
+    const announcements = dbAnnouncements.map((a: any) => ({
+        id: a.id,
+        title: a.title,
+        body: a.body,
+        author: a.author.name || "Usuario Desconocido",
+        date: formatDistanceToNow(new Date(a.createdAt), { addSuffix: true, locale: es }),
+        isPinned: a.isPinned,
+        type: "announcement" as "announcement" | "system" | "resource",
+    }));
+
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -79,10 +66,7 @@ export default function FeedPage() {
                         Anuncios institucionales y notificaciones del sistema
                     </p>
                 </div>
-                <Button className="bg-gradient-to-r from-amber-500 to-orange-500 font-semibold text-white shadow-lg shadow-amber-500/25 hover:from-amber-600 hover:to-orange-600">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Nuevo Anuncio
-                </Button>
+                <NewAnnouncementDialog authorId={authorId} />
             </div>
 
             {/* Tabs */}
@@ -154,6 +138,9 @@ export default function FeedPage() {
                                 </Card>
                             );
                         })}
+                        {announcements.length === 0 && (
+                            <div className="p-8 text-center text-sm text-zinc-500">No hay anuncios disponibles.</div>
+                        )}
                     </div>
                 </TabsContent>
 

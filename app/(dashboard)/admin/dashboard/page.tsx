@@ -1,3 +1,5 @@
+import { prisma } from "@/lib/prisma";
+import Link from "next/link";
 import {
     Card,
     CardContent,
@@ -15,72 +17,8 @@ import {
     Clock,
     CheckCircle2,
 } from "lucide-react";
-
-const metricsData = [
-    {
-        title: "Proyectos Activos",
-        value: "12",
-        change: "+2 este mes",
-        icon: FolderKanban,
-        gradient: "from-blue-500 to-indigo-600",
-        shadowColor: "shadow-blue-500/20",
-    },
-    {
-        title: "En Riesgo",
-        value: "3",
-        change: "Fecha < 3 días",
-        icon: AlertTriangle,
-        gradient: "from-red-500 to-rose-600",
-        shadowColor: "shadow-red-500/20",
-    },
-    {
-        title: "Evidencias Pendientes",
-        value: "28",
-        change: "Esperando revisión",
-        icon: ImageIcon,
-        gradient: "from-amber-500 to-orange-600",
-        shadowColor: "shadow-amber-500/20",
-    },
-    {
-        title: "Completitud Promedio",
-        value: "67%",
-        change: "+5% vs semana pasada",
-        icon: TrendingUp,
-        gradient: "from-emerald-500 to-green-600",
-        shadowColor: "shadow-emerald-500/20",
-    },
-];
-
-const recentProjects = [
-    {
-        name: "Instalación Solar — Familia Rodríguez",
-        client: "Juan Rodríguez",
-        status: "IN_PROGRESS" as const,
-        completion: 50,
-        dueDate: "15 Mar 2026",
-    },
-    {
-        name: "Sistema Solar — Comercio Pérez",
-        client: "María Pérez",
-        status: "PENDING" as const,
-        completion: 0,
-        dueDate: "05 Abr 2026",
-    },
-    {
-        name: "Paneles Solares — Hotel Caribeño",
-        client: "Resort Caribeño S.R.L.",
-        status: "COMPLETED" as const,
-        completion: 100,
-        dueDate: "28 Feb 2026",
-    },
-    {
-        name: "Instalación — Clínica Santa María",
-        client: "Clínica Santa María",
-        status: "ARCHIVED" as const,
-        completion: 100,
-        dueDate: "15 Ene 2026",
-    },
-];
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
 
 const statusConfig = {
     PENDING: { label: "Pendiente", variant: "outline" as const, className: "border-zinc-300 text-zinc-600" },
@@ -89,7 +27,73 @@ const statusConfig = {
     ARCHIVED: { label: "Archivado", variant: "secondary" as const, className: "bg-zinc-200 text-zinc-600" },
 };
 
-export default function AdminDashboardPage() {
+export default async function AdminDashboardPage() {
+    // 1. Fetch metrics
+    const activeProjectsCount = await prisma.project.count({
+        where: { status: "IN_PROGRESS" }
+    });
+
+    // Projects in risk: estimated end within next 3 days and not completed
+    const threeDaysFromNow = new Date();
+    threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
+    const inRiskCount = await prisma.project.count({
+        where: {
+            status: { in: ["PENDING", "IN_PROGRESS"] },
+            estimatedEnd: { lte: threeDaysFromNow }
+        }
+    });
+
+    const pendingEvidencesCount = await prisma.evidence.count({
+        where: { status: "PENDING" }
+    });
+
+    const avgCompletionResult = await prisma.project.aggregate({
+        _avg: { completionPct: true },
+        where: { status: { not: "ARCHIVED" } }
+    });
+    const avgCompletion = Math.round(avgCompletionResult._avg.completionPct || 0);
+
+    const metricsData = [
+        {
+            title: "Proyectos Activos",
+            value: activeProjectsCount.toString(),
+            change: "En progreso actual",
+            icon: FolderKanban,
+            gradient: "from-blue-500 to-indigo-600",
+            shadowColor: "shadow-blue-500/20",
+        },
+        {
+            title: "En Riesgo",
+            value: inRiskCount.toString(),
+            change: "Vence en < 3 días",
+            icon: AlertTriangle,
+            gradient: "from-red-500 to-rose-600",
+            shadowColor: "shadow-red-500/20",
+        },
+        {
+            title: "Evidencias Pendientes",
+            value: pendingEvidencesCount.toString(),
+            change: "Esperando revisión",
+            icon: ImageIcon,
+            gradient: "from-amber-500 to-orange-600",
+            shadowColor: "shadow-amber-500/20",
+        },
+        {
+            title: "Completitud Promedio",
+            value: `${avgCompletion}%`,
+            change: "De proyectos no archivados",
+            icon: TrendingUp,
+            gradient: "from-emerald-500 to-green-600",
+            shadowColor: "shadow-emerald-500/20",
+        },
+    ];
+
+    // 2. Fetch recent projects
+    const recentProjects = await prisma.project.findMany({
+        orderBy: { updatedAt: "desc" },
+        take: 5,
+    });
+
     return (
         <div className="space-y-8">
             {/* Header */}
@@ -141,79 +145,84 @@ export default function AdminDashboardPage() {
             </div>
 
             {/* Recent Projects Table */}
-            <Card className="border-zinc-200 dark:border-zinc-800">
+            <Card className="border-zinc-200 dark:border-zinc-800 overflow-hidden">
                 <CardHeader>
                     <CardTitle className="text-lg">Proyectos Recientes</CardTitle>
                     <CardDescription>
                         Últimos proyectos actualizados en la plataforma
                     </CardDescription>
                 </CardHeader>
-                <CardContent>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-zinc-200 text-left text-zinc-500 dark:border-zinc-800">
-                                    <th className="pb-3 pr-4 font-medium">Proyecto</th>
-                                    <th className="pb-3 pr-4 font-medium">Cliente</th>
-                                    <th className="pb-3 pr-4 font-medium">Estado</th>
-                                    <th className="pb-3 pr-4 font-medium">Completitud</th>
-                                    <th className="pb-3 font-medium">Fecha Límite</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                                {recentProjects.map((project) => {
-                                    const config = statusConfig[project.status];
-                                    return (
-                                        <tr
-                                            key={project.name}
-                                            className="transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900"
-                                        >
-                                            <td className="py-4 pr-4">
-                                                <div className="font-medium text-zinc-900 dark:text-white">
-                                                    {project.name}
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                        <thead>
+                            <tr className="border-y border-zinc-200 text-left text-zinc-500 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50">
+                                <th className="py-3 px-4 font-medium">Proyecto</th>
+                                <th className="py-3 px-4 font-medium">Cliente</th>
+                                <th className="py-3 px-4 font-medium">Estado</th>
+                                <th className="py-3 px-4 font-medium">Completitud</th>
+                                <th className="py-3 px-4 font-medium">Fecha Límite</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                            {recentProjects.map((project) => {
+                                const config = statusConfig[project.status];
+                                const dueDate = project.estimatedEnd
+                                    ? format(new Date(project.estimatedEnd), "dd MMM yyyy", { locale: es })
+                                    : "Sin fecha";
+
+                                return (
+                                    <tr
+                                        key={project.id}
+                                        className="transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900 group"
+                                    >
+                                        <td className="p-0">
+                                            <Link href={`/admin/projects/${project.id}`} className="block py-4 px-4 font-medium text-zinc-900 dark:text-white hover:underline">
+                                                {project.name}
+                                            </Link>
+                                        </td>
+                                        <td className="py-4 px-4 text-zinc-600 dark:text-zinc-400">
+                                            {project.clientName}
+                                        </td>
+                                        <td className="py-4 px-4">
+                                            <Badge
+                                                variant={config.variant}
+                                                className={config.className}
+                                            >
+                                                {config.label}
+                                            </Badge>
+                                        </td>
+                                        <td className="py-4 px-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="h-2 w-24 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+                                                    <div
+                                                        className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500 transition-all"
+                                                        style={{ width: `${project.completionPct}%` }}
+                                                    />
                                                 </div>
-                                            </td>
-                                            <td className="py-4 pr-4 text-zinc-600 dark:text-zinc-400">
-                                                {project.client}
-                                            </td>
-                                            <td className="py-4 pr-4">
-                                                <Badge
-                                                    variant={config.variant}
-                                                    className={config.className}
-                                                >
-                                                    {config.label}
-                                                </Badge>
-                                            </td>
-                                            <td className="py-4 pr-4">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="h-2 w-24 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
-                                                        <div
-                                                            className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500 transition-all"
-                                                            style={{ width: `${project.completion}%` }}
-                                                        />
-                                                    </div>
-                                                    <span className="text-xs font-medium text-zinc-500">
-                                                        {project.completion}%
-                                                    </span>
-                                                </div>
-                                            </td>
-                                            <td className="py-4">
-                                                <div className="flex items-center gap-1.5 text-zinc-500">
-                                                    {project.status === "COMPLETED" ? (
-                                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                                                    ) : (
-                                                        <Clock className="h-3.5 w-3.5" />
-                                                    )}
-                                                    {project.dueDate}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                </CardContent>
+                                                <span className="text-xs font-medium text-zinc-500">
+                                                    {project.completionPct}%
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="py-4 px-4">
+                                            <div className="flex items-center gap-1.5 text-zinc-500">
+                                                {project.status === "COMPLETED" ? (
+                                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                                                ) : (
+                                                    <Clock className="h-3.5 w-3.5" />
+                                                )}
+                                                {dueDate}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                    {recentProjects.length === 0 && (
+                        <div className="p-8 text-center text-sm text-zinc-500">No hay proyectos recientes.</div>
+                    )}
+                </div>
             </Card>
         </div>
     );
