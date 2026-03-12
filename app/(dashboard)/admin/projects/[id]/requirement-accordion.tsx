@@ -10,24 +10,32 @@ import { auditEvidence } from "@/lib/actions/audit";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { NewRequirementDialog } from "./new-requirement-dialog";
+import { UploadEvidenceDialog } from "./upload-evidence-dialog";
 
 export function RequirementAccordion({
-    groupedRequirements,
+    categories,
     projectId,
     currentUserId
 }: {
-    groupedRequirements: Record<string, any[]>;
+    categories: any[];
     projectId: string;
     currentUserId: string;
 }) {
     return (
         <Accordion type="multiple" className="w-full space-y-6">
-            {Object.entries(groupedRequirements).map(([category, requirements]) => (
-                <div key={category} className="space-y-4">
-                    <h4 className="text-sm font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 border-b border-zinc-100 dark:border-zinc-800 pb-2">
-                        {category}
-                    </h4>
-                    {requirements.map((req) => (
+            {categories.map((category) => (
+                <div key={category.id} className="space-y-4">
+                    <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-2">
+                        <h4 className="text-sm font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                            {category.name}
+                        </h4>
+                        <NewRequirementDialog projectId={projectId} categoryId={category.id} />
+                    </div>
+                    {category.requirements.length === 0 && (
+                        <p className="text-sm text-zinc-500 py-2 italic text-center">Sin requisitos en esta categoría.</p>
+                    )}
+                    {category.requirements.map((req: any) => (
                         <RequirementItem
                             key={req.id}
                             req={req}
@@ -167,8 +175,9 @@ function RequirementItem({ req, projectId, currentUserId }: { req: any, projectI
                             </div>
                         </>
                     ) : (
-                        <div className="text-sm text-zinc-500 italic py-4">
-                            El técnico aún no ha subido evidencias para este requisito.
+                        <div className="flex items-center justify-between text-sm text-zinc-500 italic py-4">
+                            <span>El técnico aún no ha subido evidencias para este requisito.</span>
+                            <UploadEvidenceDialog projectId={projectId} requirementId={req.id} currentUserId={currentUserId} />
                         </div>
                     )}
                 </div>

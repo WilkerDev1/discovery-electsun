@@ -18,14 +18,19 @@ export async function createProjectComment(formData: FormData) {
         let fileType: string | undefined = undefined;
 
         if (file && file.size > 0) {
-            const buffer = Buffer.from(await file.arrayBuffer());
-            const ext = file.name.split('.').pop() || 'tmp';
-            const key = `chat/${projectId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
-            const bucket = process.env.MINIO_BUCKET_RESOURCES || "discovery-resources";
-
-            await uploadFile(bucket, key, buffer, file.type);
-            fileUrl = `http://${process.env.MINIO_ENDPOINT}:${process.env.MINIO_PORT}/${bucket}/${key}`;
-            fileType = file.type;
+            try {
+                const buffer = Buffer.from(await file.arrayBuffer());
+                const ext = file.name.split('.').pop() || 'tmp';
+                const key = `chat/${projectId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+                const bucket = process.env.MINIO_BUCKET_RESOURCES || "discovery-resources";
+                
+                await uploadFile(bucket, key, buffer, file.type);
+                fileUrl = `http://${process.env.MINIO_ENDPOINT}:${process.env.MINIO_PORT}/${bucket}/${key}`;
+                fileType = file.type;
+            } catch (minioError) {
+                console.error("[MINIO UPLOAD ERROR]: ", minioError);
+                return { success: false, error: "Error de servidor al adjuntar el archivo multimedia." };
+            }
         }
 
         await prisma.comment.create({

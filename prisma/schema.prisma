@@ -159,6 +159,7 @@ model Project {
   assignments  ProjectAssignment[]
   requirements Requirement[]
   comments     Comment[]
+  categories   ProjectCategory[]
 
   @@map("projects")
 }
@@ -177,21 +178,38 @@ model ProjectAssignment {
   @@map("project_assignments")
 }
 
+model ProjectCategory {
+  id        String   @id @default(cuid())
+  projectId String
+  name      String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requirements Requirement[]
+
+  @@index([projectId, order])
+  @@map("project_categories")
+}
+
 model Requirement {
   id          String          @id @default(cuid())
   projectId   String
+  categoryId  String?
   name        String
   description String?
   type        RequirementType @default(PHOTO)
   isMandatory Boolean         @default(true)
   order       Int             @default(0)
-  category    String?
   createdAt   DateTime        @default(now())
 
-  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project   Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  category  ProjectCategory? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   evidences Evidence[]
 
   @@index([projectId, order])
+  @@index([categoryId])
   @@map("requirements")
 }
 

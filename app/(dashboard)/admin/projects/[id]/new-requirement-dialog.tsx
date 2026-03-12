@@ -16,18 +16,18 @@ import { Plus } from "lucide-react";
 const formSchema = z.object({
     name: z.string().min(1, "El nombre es requerido"),
     description: z.string().optional(),
-    category: z.string().optional(),
 });
 
-export function NewRequirementDialog({ projectId }: { projectId: string }) {
+export function NewRequirementDialog({ projectId, categoryId }: { projectId: string; categoryId: string }) {
     const [open, setOpen] = useState(false);
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
-        defaultValues: { name: "", description: "", category: "General" },
+        defaultValues: { name: "", description: "" },
     });
 
     async function onSubmit(values: z.infer<typeof formSchema>) {
-        const result = await createProjectRequirement(projectId, values);
+        const payload = { ...values, categoryId };
+        const result = await createProjectRequirement(projectId, payload);
 
         if (result.success) {
             toast.success("Requisito añadido", { description: "Se ha agregado el requisito ad-hoc al proyecto." });
@@ -48,7 +48,7 @@ export function NewRequirementDialog({ projectId }: { projectId: string }) {
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Añadir Nuevo Requisito Ad-Hoc</DialogTitle>
-                    <DialogDescription>Agrega un requisito que solo aplicará a este proyecto en particular.</DialogDescription>
+                    <DialogDescription>Agrega un requisito que solo aplicará a esta categoría.</DialogDescription>
                 </DialogHeader>
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -56,13 +56,6 @@ export function NewRequirementDialog({ projectId }: { projectId: string }) {
                             <FormItem>
                                 <FormLabel>Nombre del Requisito *</FormLabel>
                                 <FormControl><Input placeholder="Ej: Foto de la acometida exterior..." {...field} /></FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )} />
-                        <FormField control={form.control} name="category" render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Categoría</FormLabel>
-                                <FormControl><Input placeholder="Ej: Exteriores, Tableros, Inversor..." {...field} /></FormControl>
                                 <FormMessage />
                             </FormItem>
                         )} />

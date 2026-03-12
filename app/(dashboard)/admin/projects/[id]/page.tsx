@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
-import { NewRequirementDialog } from "./new-requirement-dialog";
+import { NewCategoryDialog } from "./new-category-dialog";
 import { ProjectMiniChat } from "./project-mini-chat";
 import { RequirementAccordion } from "./requirement-accordion";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -32,12 +32,17 @@ export default async function ProjectDetailsPage(props: ProjectDetailsPageProps)
         where: { id },
 
         include: {
-            requirements: {
-                orderBy: [{ category: 'asc' }, { order: 'asc' }],
+            categories: {
+                orderBy: { order: 'asc' },
                 include: {
-                    evidences: {
-                        orderBy: { createdAt: 'desc' },
-                        include: { uploadedBy: true }
+                    requirements: {
+                        orderBy: { order: 'asc' },
+                        include: {
+                            evidences: {
+                                orderBy: { createdAt: 'desc' },
+                                include: { uploadedBy: true }
+                            }
+                        }
                     }
                 }
             },
@@ -51,14 +56,6 @@ export default async function ProjectDetailsPage(props: ProjectDetailsPageProps)
     if (!project) {
         notFound();
     }
-
-    // Group requirements by category
-    const groupedRequirements = project.requirements.reduce((acc: any, req: any) => {
-        const cat = req.category || "General";
-        if (!acc[cat]) acc[cat] = [];
-        acc[cat].push(req);
-        return acc;
-    }, {} as Record<string, any[]>);
 
     return (
         <div className="flex-1 p-6 lg:p-8">
@@ -98,21 +95,21 @@ export default async function ProjectDetailsPage(props: ProjectDetailsPageProps)
                         <div className="flex items-center justify-between mb-4">
                             <div>
                                 <h3 className="text-xl font-bold text-zinc-900 dark:text-white">Lista de Requisitos</h3>
-                                <p className="text-sm text-zinc-500">Evidencias fotográficas y documentales necesarias</p>
+                                <p className="text-sm text-zinc-500">Agrupados por categorías estructurales</p>
                             </div>
-                            <NewRequirementDialog projectId={project.id} />
+                            <NewCategoryDialog projectId={project.id} />
                         </div>
 
                         {/* Requirements List (Scrollable) */}
                         <div className="flex-1 overflow-y-auto pr-2 pb-8">
-                            {Object.entries(groupedRequirements).length === 0 ? (
+                            {project.categories.length === 0 ? (
                                 <div className="text-center py-12 border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl text-zinc-500">
                                     <FileImage className="h-10 w-10 mx-auto mb-3 opacity-20" />
-                                    No hay requisitos asignados a este proyecto.
+                                    No hay categorías de requisitos en este proyecto.
                                 </div>
                             ) : (
                                 <RequirementAccordion
-                                    groupedRequirements={groupedRequirements}
+                                    categories={project.categories}
                                     projectId={project.id}
                                     currentUserId={currentUserId}
                                 />

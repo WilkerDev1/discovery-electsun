@@ -3,7 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
-export async function createProjectRequirement(projectId: string, data: { name: string, description?: string, category?: string }) {
+export async function createProjectRequirement(projectId: string, data: { name: string, description?: string, categoryId?: string }) {
     try {
         const lastOrder = await prisma.requirement.findFirst({
             where: { projectId },
@@ -18,7 +18,7 @@ export async function createProjectRequirement(projectId: string, data: { name: 
                 projectId,
                 name: data.name,
                 description: data.description || null,
-                category: data.category || "General",
+                categoryId: data.categoryId || null,
                 order: nextOrder,
             }
         });
