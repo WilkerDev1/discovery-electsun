@@ -13,6 +13,7 @@ import { es } from "date-fns/locale";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { updateProjectStatus, deleteProject } from "@/lib/actions/projects";
 import { toast } from "sonner";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 type ProjectStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "ARCHIVED";
 
@@ -26,6 +27,8 @@ const columns: { status: ProjectStatus; label: string; color: string }[] = [
 export function KanbanBoard({ projects: initialProjects }: { projects: any[] }) {
     const [searchQuery, setSearchQuery] = useState("");
     const [projects, setProjects] = useState(initialProjects);
+    const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     // Fix hydration mismatch between server and client for DnD
     const [isMounted, setIsMounted] = useState(false);
@@ -65,22 +68,30 @@ export function KanbanBoard({ projects: initialProjects }: { projects: any[] }) 
         }
     };
 
-    const handleDelete = async (e: React.MouseEvent, id: string) => {
+    const handleDeleteClick = (e: React.MouseEvent, id: string) => {
         e.preventDefault(); // Prevent navigating to project details
         e.stopPropagation();
+        setProjectToDelete(id);
+    };
 
-        if (window.confirm("¿Seguro que deseas eliminar este proyecto completamente? Esta acción no se puede deshacer.")) {
-            // Optimistic deletion
-            setProjects(prev => prev.filter(p => p.id !== id));
-
-            const res = await deleteProject(id);
-            if (!res.success) {
-                toast.error("Error al eliminar", { description: res.error });
-                setProjects(initialProjects); // revert
-            } else {
-                toast.success("Proyecto eliminado", { description: "El proyecto ha sido borrado de la base de datos." });
-            }
+    const confirmDelete = async (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!projectToDelete) return;
+        
+        setIsDeleting(true);
+        const res = await deleteProject(projectToDelete);
+        
+        if (!res.success) {
+            toast.error("Error al eliminar", { description: res.error });
+            setProjects(initialProjects); // revert
+        } else {
+            toast.success("Proyecto eliminado", { description: "El proyecto ha sido borrado de la base de datos." });
+            setProjects(prev => prev.filter(p => p.id !== projectToDelete));
         }
+        
+        setIsDeleting(false);
+        setProjectToDelete(null);
     };
 
     if (!isMounted) return <div className="p-8 text-center text-zinc-500">Cargando tablero...</div>;
@@ -150,7 +161,7 @@ export function KanbanBoard({ projects: initialProjects }: { projects: any[] }) 
                                                                         variant="ghost"
                                                                         size="icon"
                                                                         className="absolute top-2 right-2 h-7 w-7 bg-white/50 backdrop-blur-sm hover:bg-red-50 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all z-10"
-                                                                        onClick={(e) => handleDelete(e, project.id)}
+                                                                        onClick={(e) => handleDeleteClick(e, project.id)}
                                                                     >
                                                                         <Trash2 className="h-4 w-4" />
                                                                     </Button>
@@ -216,6 +227,23 @@ export function KanbanBoard({ projects: initialProjects }: { projects: any[] }) 
                     })}
                 </div>
             </DragDropContext>
+
+            <AlertDialog open={!!projectToDelete} onOpenChange={(open: boolean) => !open && !isDeleting && setProjectToDelete(null)}>
+                <AlertDialogContent onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>¿Eliminar proyecto?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Esta acción no se puede deshacer. Esto eliminará permanentemente el proyecto y todas sus dependencias incluidas fotografías de evidencias.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isDeleting} onClick={(e: React.MouseEvent) => e.stopPropagation()}>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmDelete} disabled={isDeleting} className="bg-red-600 hover:bg-red-700 focus:ring-red-600 text-white">
+                            {isDeleting ? "Eliminando..." : "Eliminar"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

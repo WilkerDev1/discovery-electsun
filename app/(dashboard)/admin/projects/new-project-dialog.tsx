@@ -46,7 +46,8 @@ export function NewProjectDialog() {
             form.reset();
             setFile(null);
         } else {
-            toast.error("Error al crear", { description: "No se pudo crear el proyecto." });
+            const errorMessage = typeof result.error === "string" ? result.error : "Verifica los datos del formulario.";
+            toast.error("Error al crear", { description: errorMessage });
         }
     }
 

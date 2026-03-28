@@ -25,13 +25,18 @@ export async function createProject(formData: FormData) {
         const file = formData.get("coverFile") as File;
 
         if (file && file.size > 0) {
-            const buffer = Buffer.from(await file.arrayBuffer());
-            const ext = file.name.split('.').pop() || 'jpg';
-            const key = `covers/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
-            const bucket = process.env.MINIO_BUCKET_RESOURCES || "discovery-resources";
+            try {
+                const buffer = Buffer.from(await file.arrayBuffer());
+                const ext = file.name.split('.').pop() || 'jpg';
+                const key = `covers/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+                const bucket = process.env.MINIO_BUCKET_RESOURCES || "discovery-resources";
 
-            await uploadFile(bucket, key, buffer, file.type);
-            coverUrl = `http://${process.env.MINIO_ENDPOINT}:${process.env.MINIO_PORT}/${bucket}/${key}`;
+                await uploadFile(bucket, key, buffer, file.type);
+                coverUrl = `http://${process.env.MINIO_ENDPOINT}:${process.env.MINIO_PORT}/${bucket}/${key}`;
+            } catch (error) {
+                console.error("[PROJECT CREATION ERROR]:", error);
+                return { success: false, error: "Error subiendo la imagen de portada al servidor." };
+            }
         }
 
         await prisma.project.create({
