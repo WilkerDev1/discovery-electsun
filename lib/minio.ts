@@ -16,12 +16,21 @@ export async function getSignedUrl(
     return minioClient.presignedGetObject(bucket, key, expirySeconds);
 }
 
+export async function ensureBucketExists(bucket: string): Promise<void> {
+    const exists = await minioClient.bucketExists(bucket);
+    if (!exists) {
+        await minioClient.makeBucket(bucket);
+        console.log(`[MINIO] Bucket "${bucket}" created automatically.`);
+    }
+}
+
 export async function uploadFile(
     bucket: string,
     key: string,
     buffer: Buffer,
     contentType: string
 ): Promise<string> {
+    await ensureBucketExists(bucket);
     await minioClient.putObject(bucket, key, buffer, buffer.length, {
         "Content-Type": contentType,
     });
