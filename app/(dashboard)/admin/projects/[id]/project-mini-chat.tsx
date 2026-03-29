@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { createProjectComment } from "@/lib/actions/comments";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { SendIcon, BotMessageSquare } from "lucide-react";
+import { SendIcon, BotMessageSquare, Paperclip, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
+import { FileUploadZone, FilePreview, revokeFilePreviews, createFilePreview } from "@/components/shared/file-upload-zone";
 
 type ChatComment = {
     id: string;
@@ -20,42 +21,68 @@ type ChatComment = {
     fileUrl?: string | null;
     fileType?: string | null;
 };
+
 export function ProjectMiniChat({ projectId, currentUserId, initialComments }: { projectId: string, currentUserId: string, initialComments: ChatComment[] }) {
     const [message, setMessage] = useState("");
-    const [file, setFile] = useState<File | null>(null);
+    const [filePreviews, setFilePreviews] = useState<FilePreview[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Scroll to bottom when comments change or at initial load
     useEffect(() => {
         if (scrollRef.current) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
     }, [initialComments]);
 
+    const resetAttachments = useCallback(() => {
+        revokeFilePreviews(filePreviews);
+        setFilePreviews([]);
+    }, [filePreviews]);
+
+    const handleAttachClick = useCallback(() => {
+        fileInputRef.current?.click();
+    }, []);
+
+    const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files) return;
+        const newPreviews = Array.from(e.target.files).map(createFilePreview);
+        setFilePreviews((prev) => [...prev, ...newPreviews]);
+        e.target.value = "";
+    }, []);
+
     async function handleSend() {
-        if (!message.trim() && !file) return;
+        if (!message.trim() && filePreviews.length === 0) return;
 
         setIsSubmitting(true);
-        const formData = new FormData();
-        formData.append("projectId", projectId);
-        formData.append("authorId", currentUserId);
-        formData.append("body", message);
-        if (file) {
-            formData.append("file", file);
-        }
 
-        const result = await createProjectComment(formData);
-        setIsSubmitting(false);
-
-        if (result.success) {
-            setMessage("");
-            setFile(null);
-            if (fileInputRef.current) fileInputRef.current.value = "";
+        // Send one comment per file (or one text-only comment)
+        if (filePreviews.length === 0) {
+            const formData = new FormData();
+            formData.append("projectId", projectId);
+            formData.append("authorId", currentUserId);
+            formData.append("body", message);
+            const result = await createProjectComment(formData);
+            if (!result.success) {
+                toast.error("Error al enviar", { description: result.error });
+            }
         } else {
-            toast.error("Error al enviar", { description: result.error });
+            for (let i = 0; i < filePreviews.length; i++) {
+                const formData = new FormData();
+                formData.append("projectId", projectId);
+                formData.append("authorId", currentUserId);
+                formData.append("body", i === 0 ? message : ""); // attach text only to first
+                formData.append("file", filePreviews[i].file);
+                const result = await createProjectComment(formData);
+                if (!result.success) {
+                    toast.error("Error al enviar", { description: result.error || `No se pudo enviar ${filePreviews[i].file.name}` });
+                }
+            }
         }
+
+        setMessage("");
+        resetAttachments();
+        setIsSubmitting(false);
     }
 
     return (
@@ -121,30 +148,42 @@ export function ProjectMiniChat({ projectId, currentUserId, initialComments }: {
 
             {/* Input Area */}
             <div className="p-4 bg-white dark:bg-zinc-950 border-t border-zinc-100 dark:border-zinc-800">
-                {file && (
-                    <div className="mb-2 px-3 py-1 bg-zinc-100 dark:bg-zinc-900 rounded-lg text-xs flex justify-between items-center text-zinc-600 dark:text-zinc-400">
-                        <span className="truncate max-w-[200px]">Adjunto: {file.name}</span>
-                        <button type="button" onClick={() => setFile(null)} className="text-red-500 font-bold ml-2">X</button>
+                {/* File preview strip using compact FileUploadZone */}
+                {filePreviews.length > 0 && (
+                    <div className="mb-2">
+                        <FileUploadZone
+                            files={filePreviews}
+                            onFilesChange={setFilePreviews}
+                            accept="*"
+                            multiple
+                            variant="compact"
+                            disabled={isSubmitting}
+                        />
                     </div>
                 )}
+
+                {/* Hidden file input for the clip button */}
+                <input
+                    type="file"
+                    ref={fileInputRef}
+                    className="hidden"
+                    multiple
+                    onChange={handleFileInputChange}
+                />
+
                 <form
                     onSubmit={(e) => { e.preventDefault(); handleSend(); }}
                     className="flex gap-2 items-end"
                 >
-                    <input
-                        type="file"
-                        ref={fileInputRef}
-                        className="hidden"
-                        onChange={(e) => setFile(e.target.files?.[0] || null)}
-                    />
                     <Button
                         type="button"
                         variant="outline"
                         size="icon"
-                        onClick={() => fileInputRef.current?.click()}
+                        onClick={handleAttachClick}
+                        disabled={isSubmitting}
                         className="rounded-xl h-10 w-10 shrink-0 text-zinc-500"
                     >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" /></svg>
+                        <Paperclip className="h-4 w-4" />
                     </Button>
                     <Input
                         placeholder="Escribe un mensaje..."
@@ -156,10 +195,10 @@ export function ProjectMiniChat({ projectId, currentUserId, initialComments }: {
                     <Button
                         type="submit"
                         size="icon"
-                        disabled={(!message.trim() && !file) || isSubmitting}
+                        disabled={(!message.trim() && filePreviews.length === 0) || isSubmitting}
                         className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm shrink-0 h-10 w-10"
                     >
-                        <SendIcon className="h-4 w-4" />
+                        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <SendIcon className="h-4 w-4" />}
                     </Button>
                 </form>
             </div>

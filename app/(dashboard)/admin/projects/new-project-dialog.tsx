@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { Plus, X, ImagePlus } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
+import { FileUploadZone, FilePreview, revokeFilePreviews } from "@/components/shared/file-upload-zone";
 
 const formSchema = z.object({
     name: z.string().min(1, "El nombre es requerido"),
@@ -18,11 +19,6 @@ const formSchema = z.object({
     clientAddress: z.string().min(1, "La dirección es requerida"),
     estimatedEnd: z.string().optional(),
 });
-
-interface FilePreview {
-    file: File;
-    previewUrl: string;
-}
 
 export function NewProjectDialog() {
     const [open, setOpen] = useState(false);
@@ -34,34 +30,8 @@ export function NewProjectDialog() {
         defaultValues: { name: "", clientName: "", clientAddress: "", estimatedEnd: "" },
     });
 
-    const handleFilesSelected = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        const selectedFiles = e.target.files;
-        if (!selectedFiles) return;
-
-        const newPreviews: FilePreview[] = [];
-        Array.from(selectedFiles).forEach((file) => {
-            if (!file.type.startsWith("image/")) {
-                toast.error("Archivo no soportado", { description: `"${file.name}" no es una imagen.` });
-                return;
-            }
-            newPreviews.push({ file, previewUrl: URL.createObjectURL(file) });
-        });
-
-        setFilePreviews((prev) => [...prev, ...newPreviews]);
-        // Reset input value so re-selecting the same file works
-        e.target.value = "";
-    }, []);
-
-    const removeFile = useCallback((index: number) => {
-        setFilePreviews((prev) => {
-            const removed = prev[index];
-            if (removed) URL.revokeObjectURL(removed.previewUrl);
-            return prev.filter((_, i) => i !== index);
-        });
-    }, []);
-
     const resetForm = useCallback(() => {
-        filePreviews.forEach((fp) => URL.revokeObjectURL(fp.previewUrl));
+        revokeFilePreviews(filePreviews);
         setFilePreviews([]);
         form.reset();
     }, [filePreviews, form]);
@@ -74,7 +44,6 @@ export function NewProjectDialog() {
             formData.append(k, v || "");
         });
 
-        // Append the first image as the cover, and the rest as additional files
         if (filePreviews.length > 0) {
             formData.append("coverFile", filePreviews[0].file);
         }
@@ -123,59 +92,21 @@ export function NewProjectDialog() {
                             <FormItem><FormLabel>Fecha Límite (Opcional)</FormLabel><FormControl><Input type="date" {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
                         )} />
 
-                        {/* Multi-file upload with preview */}
-                        <div className="space-y-2">
+                        <div className="space-y-1">
                             <FormLabel className="text-sm font-medium">Imágenes del Proyecto</FormLabel>
                             <p className="text-xs text-zinc-500">La primera imagen será la portada. Puedes adjuntar varias.</p>
-
-                            {filePreviews.length > 0 && (
-                                <div className="grid grid-cols-3 gap-2">
-                                    {filePreviews.map((fp, index) => (
-                                        <div key={fp.previewUrl} className="group relative aspect-square overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
-                                            <img
-                                                src={fp.previewUrl}
-                                                alt={fp.file.name}
-                                                className="h-full w-full object-cover"
-                                            />
-                                            {index === 0 && (
-                                                <span className="absolute bottom-1 left-1 rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white shadow">
-                                                    Portada
-                                                </span>
-                                            )}
-                                            <button
-                                                type="button"
-                                                onClick={() => removeFile(index)}
-                                                className="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-600"
-                                            >
-                                                <X className="h-3 w-3" />
-                                            </button>
-                                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/50 to-transparent p-1">
-                                                <p className="truncate text-[9px] text-white/80">{fp.file.name}</p>
-                                            </div>
-                                        </div>
-                                    ))}
-
-                                    {/* Add more button */}
-                                    <label className="flex aspect-square cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-zinc-300 hover:border-amber-400 hover:bg-amber-50/50 dark:border-zinc-700 dark:hover:border-amber-500 dark:hover:bg-amber-950/20 transition-colors">
-                                        <ImagePlus className="h-5 w-5 text-zinc-400" />
-                                        <span className="mt-1 text-[10px] text-zinc-400">Añadir</span>
-                                        <input type="file" accept="image/*" multiple className="hidden" onChange={handleFilesSelected} />
-                                    </label>
-                                </div>
-                            )}
-
-                            {filePreviews.length === 0 && (
-                                <label className="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-zinc-300 py-6 hover:border-amber-400 hover:bg-amber-50/50 dark:border-zinc-700 dark:hover:border-amber-500 dark:hover:bg-amber-950/20 transition-colors">
-                                    <ImagePlus className="h-8 w-8 text-zinc-400" />
-                                    <span className="mt-2 text-xs text-zinc-500">Haz clic para seleccionar imágenes</span>
-                                    <span className="text-[10px] text-zinc-400">JPG, PNG, WebP</span>
-                                    <input type="file" accept="image/*" multiple className="hidden" onChange={handleFilesSelected} />
-                                </label>
-                            )}
+                            <FileUploadZone
+                                files={filePreviews}
+                                onFilesChange={setFilePreviews}
+                                accept="image/*"
+                                multiple
+                                coverBadgeLabel="Portada"
+                                disabled={isSubmitting}
+                            />
                         </div>
 
                         <Button type="submit" className="w-full" disabled={isSubmitting}>
-                            {isSubmitting ? "Creando..." : "Crear Proyecto"}
+                            {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creando...</> : "Crear Proyecto"}
                         </Button>
                     </form>
                 </Form>
