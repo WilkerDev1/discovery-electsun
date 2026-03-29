@@ -45,58 +45,82 @@ async function main() {
 
     console.log("✅ Technician user seeded:", technician.email);
 
-    // Create a sample template
+    // Create a sample template with categories and requirements
     const template = await prisma.template.create({
         data: {
             name: "Instalación Residencial 5kW",
             description:
                 "Plantilla estándar para instalaciones residenciales de 5kW con inversor y paneles solares.",
-            requirements: {
+            categories: {
                 create: [
                     {
-                        name: "Foto Techo Antes",
-                        description:
-                            "Fotografía panorámica del techo antes de la instalación",
-                        type: "PHOTO",
-                        isMandatory: true,
+                        name: "Documentación Previa",
+                        order: 0,
+                        allowedRoles: ["ADMIN", "TECHNICIAN"],
+                        requirements: {
+                            create: [
+                                {
+                                    name: "Foto Techo Antes",
+                                    description: "Fotografía panorámica del techo antes de la instalación",
+                                    type: "PHOTO",
+                                    isMandatory: true,
+                                    order: 1,
+                                },
+                                {
+                                    name: "Foto Paneles Instalados",
+                                    description: "Vista general de los paneles ya montados en el techo",
+                                    type: "PHOTO",
+                                    isMandatory: true,
+                                    order: 2,
+                                },
+                            ],
+                        },
+                    },
+                    {
+                        name: "Equipos e Instalación",
                         order: 1,
+                        allowedRoles: ["ADMIN", "TECHNICIAN"],
+                        requirements: {
+                            create: [
+                                {
+                                    name: "Foto Inversor",
+                                    description: "Fotografía del inversor instalado y conectado",
+                                    type: "PHOTO",
+                                    isMandatory: true,
+                                    order: 1,
+                                },
+                                {
+                                    name: "Foto Medidor",
+                                    description: "Lectura del medidor de energía bidireccional",
+                                    type: "PHOTO",
+                                    isMandatory: true,
+                                    order: 2,
+                                },
+                            ],
+                        },
                     },
                     {
-                        name: "Foto Paneles Instalados",
-                        description:
-                            "Vista general de los paneles ya montados en el techo",
-                        type: "PHOTO",
-                        isMandatory: true,
+                        name: "Datos Técnicos",
                         order: 2,
-                    },
-                    {
-                        name: "Foto Inversor",
-                        description: "Fotografía del inversor instalado y conectado",
-                        type: "PHOTO",
-                        isMandatory: true,
-                        order: 3,
-                    },
-                    {
-                        name: "Foto Medidor",
-                        description: "Lectura del medidor de energía bidireccional",
-                        type: "PHOTO",
-                        isMandatory: true,
-                        order: 4,
-                    },
-                    {
-                        name: "Potencia Instalada (kW)",
-                        description: "Valor numérico de la potencia total instalada",
-                        type: "NUMBER",
-                        isMandatory: true,
-                        order: 5,
-                    },
-                    {
-                        name: "Observaciones",
-                        description:
-                            "Notas adicionales del técnico sobre la instalación",
-                        type: "TEXT",
-                        isMandatory: false,
-                        order: 6,
+                        allowedRoles: ["ADMIN", "TECHNICIAN", "MANAGER"],
+                        requirements: {
+                            create: [
+                                {
+                                    name: "Potencia Instalada (kW)",
+                                    description: "Valor numérico de la potencia total instalada",
+                                    type: "NUMBER",
+                                    isMandatory: true,
+                                    order: 1,
+                                },
+                                {
+                                    name: "Observaciones",
+                                    description: "Notas adicionales del técnico sobre la instalación",
+                                    type: "TEXT",
+                                    isMandatory: false,
+                                    order: 2,
+                                },
+                            ],
+                        },
                     },
                 ],
             },
@@ -113,41 +137,13 @@ async function main() {
                 clientName: "Juan Rodríguez",
                 clientAddress: "Calle Las Palmas #42, Santo Domingo",
                 clientPhone: "+1 (809) 555-0101",
-                description:
-                    "Instalación residencial de 5kW con 12 paneles solares",
+                description: "Instalación residencial de 5kW con 12 paneles solares",
                 status: "IN_PROGRESS",
                 completionPct: 50,
                 templateId: template.id,
+                allowedRoles: ["ADMIN", "TECHNICIAN", "MANAGER"],
                 estimatedStart: new Date("2026-03-01"),
                 estimatedEnd: new Date("2026-03-15"),
-                requirements: {
-                    create: [
-                        {
-                            name: "Foto Techo Antes",
-                            type: "PHOTO",
-                            isMandatory: true,
-                            order: 1,
-                        },
-                        {
-                            name: "Foto Paneles",
-                            type: "PHOTO",
-                            isMandatory: true,
-                            order: 2,
-                        },
-                        {
-                            name: "Foto Inversor",
-                            type: "PHOTO",
-                            isMandatory: true,
-                            order: 3,
-                        },
-                        {
-                            name: "Foto Medidor",
-                            type: "PHOTO",
-                            isMandatory: true,
-                            order: 4,
-                        },
-                    ],
-                },
                 assignments: {
                     create: { userId: technician.id },
                 },
@@ -162,24 +158,9 @@ async function main() {
                 description: "Instalación comercial de 10kW con 24 paneles",
                 status: "PENDING",
                 completionPct: 0,
+                allowedRoles: ["ADMIN", "MANAGER"],
                 estimatedStart: new Date("2026-03-20"),
                 estimatedEnd: new Date("2026-04-05"),
-                requirements: {
-                    create: [
-                        {
-                            name: "Estudio de Sombras",
-                            type: "PHOTO",
-                            isMandatory: true,
-                            order: 1,
-                        },
-                        {
-                            name: "Foto Estructura",
-                            type: "PHOTO",
-                            isMandatory: true,
-                            order: 2,
-                        },
-                    ],
-                },
             },
         }),
         prisma.project.create({
@@ -191,19 +172,10 @@ async function main() {
                 description: "Instalación hotelera de 25kW",
                 status: "COMPLETED",
                 completionPct: 100,
+                allowedRoles: ["ADMIN", "TECHNICIAN", "MANAGER", "ACCOUNTING"],
                 completedAt: new Date("2026-02-28"),
                 estimatedStart: new Date("2026-02-01"),
                 estimatedEnd: new Date("2026-02-28"),
-                requirements: {
-                    create: [
-                        {
-                            name: "Foto Final",
-                            type: "PHOTO",
-                            isMandatory: true,
-                            order: 1,
-                        },
-                    ],
-                },
             },
         }),
         prisma.project.create({
@@ -214,19 +186,10 @@ async function main() {
                 description: "Sistema de 8kW para clínica médica",
                 status: "ARCHIVED",
                 completionPct: 100,
+                allowedRoles: ["ADMIN"],
                 completedAt: new Date("2026-01-15"),
                 estimatedStart: new Date("2025-12-01"),
                 estimatedEnd: new Date("2026-01-15"),
-                requirements: {
-                    create: [
-                        {
-                            name: "Foto Entrega",
-                            type: "PHOTO",
-                            isMandatory: true,
-                            order: 1,
-                        },
-                    ],
-                },
             },
         }),
     ]);

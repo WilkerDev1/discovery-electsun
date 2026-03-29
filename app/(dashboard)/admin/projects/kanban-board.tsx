@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, Calendar, GripVertical, Trash2 } from "lucide-react";
-import { NewProjectDialog } from "./new-project-dialog";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
@@ -98,13 +97,7 @@ export function KanbanBoard({ projects: initialProjects }: { projects: any[] }) 
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">Proyectos</h1>
-                    <p className="mt-1 text-sm text-zinc-500">Gestión Kanban del flujo de instalaciones</p>
-                </div>
-                <NewProjectDialog />
-            </div>
+            {/* Search bar */}
 
             <div className="relative max-w-sm">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />

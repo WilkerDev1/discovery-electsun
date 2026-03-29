@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
 import Link from "next/link";
 import {
     Card,
@@ -28,9 +29,14 @@ const statusConfig = {
 };
 
 export default async function AdminDashboardPage() {
+    const session = await auth();
+    const userRole = session?.user?.role || "TECHNICIAN";
+    const isAdmin = userRole === "ADMIN";
+    const roleFilter = isAdmin ? {} : { allowedRoles: { has: userRole as any } };
+
     // 1. Fetch metrics
     const activeProjectsCount = await prisma.project.count({
-        where: { status: "IN_PROGRESS" }
+        where: { status: "IN_PROGRESS", ...roleFilter }
     });
 
     // Projects in risk: estimated end within next 3 days and not completed
@@ -39,7 +45,8 @@ export default async function AdminDashboardPage() {
     const inRiskCount = await prisma.project.count({
         where: {
             status: { in: ["PENDING", "IN_PROGRESS"] },
-            estimatedEnd: { lte: threeDaysFromNow }
+            estimatedEnd: { lte: threeDaysFromNow },
+            ...roleFilter,
         }
     });
 
@@ -49,7 +56,7 @@ export default async function AdminDashboardPage() {
 
     const avgCompletionResult = await prisma.project.aggregate({
         _avg: { completionPct: true },
-        where: { status: { not: "ARCHIVED" } }
+        where: { status: { not: "ARCHIVED" }, ...roleFilter }
     });
     const avgCompletion = Math.round(avgCompletionResult._avg.completionPct || 0);
 
@@ -88,8 +95,9 @@ export default async function AdminDashboardPage() {
         },
     ];
 
-    // 2. Fetch recent projects
+    // 2. Fetch recent projects (RBAC filtered)
     const recentProjects = await prisma.project.findMany({
+        where: roleFilter,
         orderBy: { updatedAt: "desc" },
         take: 5,
     });

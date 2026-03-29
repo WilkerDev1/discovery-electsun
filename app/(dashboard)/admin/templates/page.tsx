@@ -1,12 +1,22 @@
-export default function TemplatesPage() {
+import { getAllTemplates } from "@/lib/actions/templates";
+import { TemplateCards } from "./template-cards";
+
+export default async function TemplatesPage() {
+    const templates = await getAllTemplates();
+
     return (
-        <div className="flex-1 space-y-4 p-8 pt-6">
-            <div className="flex items-center justify-between space-y-2">
-                <h2 className="text-3xl font-bold tracking-tight">Plantillas</h2>
+        <div className="space-y-6">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">
+                        Motor de Plantillas
+                    </h1>
+                    <p className="text-sm text-zinc-500 mt-1">
+                        Crea y gestiona plantillas reutilizables para proyectos.
+                    </p>
+                </div>
             </div>
-            <div className="border rounded-md p-8 text-center text-muted-foreground">
-                Módulo de plantillas en construcción.
-            </div>
+            <TemplateCards initialTemplates={templates} />
         </div>
     );
 }

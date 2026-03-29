@@ -12,8 +12,8 @@ import {
     BookOpen,
     Sun,
     ChevronLeft,
-    LogOut,
 } from "lucide-react";
+import { LogoutButton } from "@/components/shared/logout-button";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -141,16 +141,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
                 {/* Footer */}
                 <div className="flex items-center justify-between p-3">
-                    {!collapsed && (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-zinc-500 hover:text-red-600 dark:hover:text-red-400"
-                        >
-                            <LogOut className="mr-2 h-4 w-4" />
-                            Salir
-                        </Button>
-                    )}
+                    <LogoutButton collapsed={collapsed} />
                     <Button
                         variant="ghost"
                         size="icon"

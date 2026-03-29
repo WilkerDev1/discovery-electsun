@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { uploadFile, getFileProxyUrl } from "@/lib/minio";
+import type { Role, RequirementType } from "@prisma/client";
 
 const createProjectSchema = z.object({
     name: z.string().min(1, "El nombre es requerido"),
@@ -21,6 +22,16 @@ export async function createProject(formData: FormData) {
     }
 
     try {
+        // Parse allowed roles
+        let allowedRoles: Role[] = ["ADMIN"];
+        try {
+            const rolesRaw = formData.get("allowedRoles") as string;
+            if (rolesRaw) allowedRoles = JSON.parse(rolesRaw) as Role[];
+        } catch {
+            // Fallback to default
+        }
+
+        // Handle cover file upload
         let coverUrl: string | undefined = undefined;
         const file = formData.get("coverFile") as File;
 
@@ -39,15 +50,65 @@ export async function createProject(formData: FormData) {
             }
         }
 
-        await prisma.project.create({
-            data: {
-                name: parsed.data.name,
-                clientName: parsed.data.clientName,
-                clientAddress: parsed.data.clientAddress,
-                estimatedEnd: parsed.data.estimatedEnd ? new Date(parsed.data.estimatedEnd) : null,
-                status: "PENDING",
-                completionPct: 0,
-                coverUrl: coverUrl,
+        // Check if using a template
+        const templateId = formData.get("templateId") as string;
+        const validTemplateId = templateId && templateId !== "none" ? templateId : null;
+
+        // Use a transaction to handle the template cloning
+        await prisma.$transaction(async (tx) => {
+            // 1. Create the project first
+            const project = await tx.project.create({
+                data: {
+                    name: parsed.data.name,
+                    clientName: parsed.data.clientName,
+                    clientAddress: parsed.data.clientAddress,
+                    estimatedEnd: parsed.data.estimatedEnd ? new Date(parsed.data.estimatedEnd) : null,
+                    status: "PENDING",
+                    completionPct: 0,
+                    coverUrl,
+                    templateId: validTemplateId,
+                    allowedRoles,
+                },
+            });
+
+            // 2. If template, clone its categories and requirements
+            if (validTemplateId) {
+                const template = await tx.template.findUnique({
+                    where: { id: validTemplateId },
+                    include: {
+                        categories: {
+                            include: { requirements: true },
+                            orderBy: { order: "asc" },
+                        },
+                    },
+                });
+
+                if (template) {
+                    for (const cat of template.categories) {
+                        const newCat = await tx.projectCategory.create({
+                            data: {
+                                projectId: project.id,
+                                name: cat.name,
+                                order: cat.order,
+                                allowedRoles: cat.allowedRoles,
+                            },
+                        });
+
+                        if (cat.requirements.length > 0) {
+                            await tx.requirement.createMany({
+                                data: cat.requirements.map((req) => ({
+                                    projectId: project.id,
+                                    categoryId: newCat.id,
+                                    name: req.name,
+                                    description: req.description,
+                                    type: req.type,
+                                    isMandatory: req.isMandatory,
+                                    order: req.order,
+                                })),
+                            });
+                        }
+                    }
+                }
             }
         });
 
@@ -55,21 +116,21 @@ export async function createProject(formData: FormData) {
         revalidatePath("/admin/dashboard");
         return { success: true };
     } catch (error) {
-        console.error("Error creating project:", error);
+        console.error("[PROJECT CREATION ERROR]:", error);
         return { success: false, error: "Error interno del servidor" };
     }
 }
 
-export async function updateProjectStatus(projectId: string, newStatus: any) {
+export async function updateProjectStatus(projectId: string, newStatus: string) {
     try {
         await prisma.project.update({
             where: { id: projectId },
-            data: { status: newStatus }
+            data: { status: newStatus as any },
         });
         revalidatePath("/admin/projects");
         return { success: true };
     } catch (e) {
-        console.error("Failed to update status", e);
+        console.error("[PROJECT STATUS ERROR]:", e);
         return { success: false, error: "Error actualizando estado" };
     }
 }
@@ -77,12 +138,12 @@ export async function updateProjectStatus(projectId: string, newStatus: any) {
 export async function deleteProject(projectId: string) {
     try {
         await prisma.project.delete({
-            where: { id: projectId }
+            where: { id: projectId },
         });
         revalidatePath("/admin/projects");
         return { success: true };
     } catch (e) {
-        console.error("Failed to delete project", e);
+        console.error("[PROJECT DELETE ERROR]:", e);
         return { success: false, error: "Error eliminando el proyecto" };
     }
 }
