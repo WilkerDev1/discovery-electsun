@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { uploadFile } from "@/lib/minio";
+import { uploadFile, getFileProxyUrl } from "@/lib/minio";
 
 export async function uploadEvidenceAdmin(formData: FormData) {
     try {
@@ -26,7 +26,7 @@ export async function uploadEvidenceAdmin(formData: FormData) {
             const bucket = process.env.MINIO_BUCKET_RESOURCES || "discovery-resources";
             
             await uploadFile(bucket, fileKey, buffer, file.type);
-            fileUrl = `http://${process.env.MINIO_ENDPOINT}:${process.env.MINIO_PORT}/${bucket}/${fileKey}`;
+            fileUrl = getFileProxyUrl(bucket, fileKey);
             fileType = file.type;
         } catch (minioError) {
             console.error("[MINIO UPLOAD ERROR EVIDENCES]: ", minioError);
@@ -49,8 +49,9 @@ export async function uploadEvidenceAdmin(formData: FormData) {
 
         revalidatePath(`/admin/projects/${projectId}`);
         return { success: true, evidence };
-    } catch (error) {
-        console.error("Error creating admin evidence:", error);
-        return { success: false, error: "Error al crear la evidencia" };
+    } catch (error: any) {
+        console.error("[EVIDENCE CREATE ERROR] Prisma/Server:", error?.message || error);
+        if (error?.code) console.error("[EVIDENCE CREATE ERROR] Code:", error.code, "Meta:", JSON.stringify(error?.meta));
+        return { success: false, error: `Error al crear la evidencia: ${error?.message || "Error desconocido"}` };
     }
 }

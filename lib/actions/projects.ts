@@ -3,7 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { uploadFile } from "@/lib/minio";
+import { uploadFile, getFileProxyUrl } from "@/lib/minio";
 
 const createProjectSchema = z.object({
     name: z.string().min(1, "El nombre es requerido"),
@@ -32,7 +32,7 @@ export async function createProject(formData: FormData) {
                 const bucket = process.env.MINIO_BUCKET_RESOURCES || "discovery-resources";
 
                 await uploadFile(bucket, key, buffer, file.type);
-                coverUrl = `http://${process.env.MINIO_ENDPOINT}:${process.env.MINIO_PORT}/${bucket}/${key}`;
+                coverUrl = getFileProxyUrl(bucket, key);
             } catch (error) {
                 console.error("[PROJECT CREATION ERROR]:", error);
                 return { success: false, error: "Error subiendo la imagen de portada al servidor." };

@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { uploadFile } from "@/lib/minio";
+import { uploadFile, getFileProxyUrl } from "@/lib/minio";
 
 export async function createProjectComment(formData: FormData) {
     try {
@@ -25,7 +25,7 @@ export async function createProjectComment(formData: FormData) {
                 const bucket = process.env.MINIO_BUCKET_RESOURCES || "discovery-resources";
                 
                 await uploadFile(bucket, key, buffer, file.type);
-                fileUrl = `http://${process.env.MINIO_ENDPOINT}:${process.env.MINIO_PORT}/${bucket}/${key}`;
+                fileUrl = getFileProxyUrl(bucket, key);
                 fileType = file.type;
             } catch (minioError) {
                 console.error("[MINIO UPLOAD ERROR]: ", minioError);

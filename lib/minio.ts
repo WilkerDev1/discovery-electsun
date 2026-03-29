@@ -22,6 +22,23 @@ export async function ensureBucketExists(bucket: string): Promise<void> {
         await minioClient.makeBucket(bucket);
         console.log(`[MINIO] Bucket "${bucket}" created automatically.`);
     }
+    // Set public read-only policy so browsers can access files directly
+    const policy = JSON.stringify({
+        Version: "2012-10-17",
+        Statement: [
+            {
+                Effect: "Allow",
+                Principal: { AWS: ["*"] },
+                Action: ["s3:GetObject"],
+                Resource: [`arn:aws:s3:::${bucket}/*`],
+            },
+        ],
+    });
+    try {
+        await minioClient.setBucketPolicy(bucket, policy);
+    } catch {
+        // Policy may already be set, not critical
+    }
 }
 
 export async function uploadFile(
@@ -35,4 +52,12 @@ export async function uploadFile(
         "Content-Type": contentType,
     });
     return key;
+}
+
+/**
+ * Generate a proxy URL that serves files through Next.js API
+ * instead of directly from MinIO, avoiding CORS/ORB issues.
+ */
+export function getFileProxyUrl(bucket: string, key: string): string {
+    return `/api/files/${bucket}/${key}`;
 }
